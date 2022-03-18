@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import "./RapidToken.sol";
 import "./RewardToken.sol";
 
-contract StakingFarm2 {
+contract StakingFarm3 {
 
     RapidToken public rapidToken;
     RewardToken public rewardToken;
 
-    uint constant  numberOfBlocksPerDay = 1; // Estimating Block Generation time as 3 seconds per block
+     uint constant  numberOfBlocksPerDay = 1; // Estimating Block Generation time as 3 seconds per block
     uint constant stakingDays = 30;
 
     uint constant stakingPeriod = stakingDays * numberOfBlocksPerDay;
@@ -26,6 +26,10 @@ contract StakingFarm2 {
         uint pendingRewards;
         uint stakedTokens;
         uint toBeCalculatedFrom;
+        uint toBeCalculatedTill;
+        uint reward;
+        uint stakingWeight;
+        bool isWithdrawn;
     }
     mapping(address=>stakingBalance) public stakingBalances;
     mapping(address=>bool) public hasStaked;
@@ -48,7 +52,7 @@ contract StakingFarm2 {
         nextStakingRoundStartTime = block.number + stakingPeriod;
     }
 
-    function stakeTokens(uint _amount) public {
+    function deposit(uint _amount) public {
         require(_amount>0, "Staking amount must be greater than 0");
         require(!isCurrentStakingRoundEnded[currentStakingRound],"Cannot stake tokens after the current staking round has ended");
         require(block.number<nextStakingRoundStartTime,"Cannot stake tokens after the staking period");
@@ -68,35 +72,53 @@ contract StakingFarm2 {
         isStaking[msg.sender] = true;
         emit staked(msg.sender, _amount, block.number);
     }
-
-    function refundStakeAndIssueReward() public {
-        require(block.number>nextStakingRoundStartTime, "Cannot issue tokens before the current staking round is ended");
-        uint totalStakingWeight= getTotalStakingWeight();
-        for(uint i=0; i<stakers.length; i++) {
-            if(isStaking[stakers[i]]) {
-             uint stakerWeight = (stakingBalances[stakers[i]].stakedTokens 
-                * (nextStakingRoundStartTime - stakingBalances[stakers[i]].toBeCalculatedFrom))
-                 + stakingBalances[stakers[i]].pendingRewards;
-                uint reward = stakerWeight * rewardTokensPerStakingPeriod / totalStakingWeight;
-             rewardToken.transfer(stakers[i], reward);
-             uint balance = stakingBalances[stakers[i]].stakedTokens ;
-             rapidToken.transfer(stakers[i], balance);
-             stakingBalances[stakers[i]].stakedTokens = 0;
-             isStaking[stakers[i]] = false;
-            }
-         }
-        isCurrentStakingRoundEnded[currentStakingRound] = true;
-        totalStakedTokens = 0;
+    function withDraw() public {
+        require(!stakingBalances[msg.sender].isWithdrawn,"Already Withdrawn");
+        uint balance = stakingBalances[msg.sender].stakedTokens ;
+        rapidToken.transfer(msg.sender, balance); 
+        stakingBalances[msg.sender].toBeCalculatedTill = block.number;
+        stakingBalances[msg.sender].isWithdrawn = true;
     }
-    function getTotalStakingWeight() public view returns(uint){
+    function claim() public {
+        require(isCurrentStakingRoundEnded[currentStakingRound],"Cannot claim rewards before the current staking round has ended");
+        require(!isStaking[msg.sender],"Cannot claim rewards while staking");
+        rewardToken.transfer(msg.sender, stakingBalances[msg.sender].reward);
+        stakingBalances[msg.sender].reward = 0;
+    }
+
+    function endStakingRound() public {
+        require(block.number>nextStakingRoundStartTime, "Cannot end before the current staking round is ended");
+        require(!isCurrentStakingRoundEnded[currentStakingRound],"Cannot end the current staking round twice");
+        isCurrentStakingRoundEnded[currentStakingRound] = true;
+        uint totalStakingWeight = getTotalStakingWeight();
+        for(uint i=0;i<stakers.length;i++){
+            uint stakingWeight = stakingBalances[stakers[i]].stakingWeight;
+            uint reward = (rewardTokensPerStakingPeriod * stakingWeight) / totalStakingWeight;
+            stakingBalances[stakers[i]].reward = reward;
+        }
+    }
+
+    function getTotalStakingWeight() private returns(uint){
         uint totalStakingWeight = 0;
         for(uint i=0; i<stakers.length; i++) {
             if(isStaking[stakers[i]]) {
-                totalStakingWeight += (stakingBalances[stakers[i]].stakedTokens 
+                if(stakingBalances[stakers[i]].toBeCalculatedTill == 0) {
+                stakingBalances[stakers[i]].stakingWeight = (stakingBalances[stakers[i]].stakedTokens 
                 * (nextStakingRoundStartTime - stakingBalances[stakers[i]].toBeCalculatedFrom))
                  + stakingBalances[stakers[i]].pendingRewards;
+                    totalStakingWeight += stakingBalances[stakers[i]].stakingWeight;
+                }
+                else {
+                    stakingBalances[stakers[i]].stakingWeight = (stakingBalances[stakers[i]].stakedTokens 
+                * (stakingBalances[stakers[i]].toBeCalculatedTill - stakingBalances[stakers[i]].toBeCalculatedFrom))
+                 + stakingBalances[stakers[i]].pendingRewards;
+                    totalStakingWeight += stakingBalances[stakers[i]].stakingWeight;
+                }
+                 isStaking[stakers[i]] = false;
+                 stakingBalances[stakers[i]].stakedTokens = 0;
             }
         }
         return totalStakingWeight;
     }
- }
+    
+}
