@@ -46,7 +46,7 @@ The reward per user is calculated as follows:
 
 ### Solution 3 - StakingFarm3.sol
 
-This solution is similar to previous solution but add a function which allows the users to withdraw their staking tokens before the staking period ends. The rewards are only calculated for the staking peroid.
+This solution is similar to the previous solution but has an additional function which allows the users to withdraw their staking tokens before the staking period ends. The rewards are only calculated for the staking peroid.
 
 ### Output screens
 ![Farm1](outputs/Farm3.png)
@@ -59,4 +59,4 @@ This solution is similar to previous solution but add a function which allows th
 
 # Final conclusion
 1. The objective is to distribute the all the tokens minted within a staking round to be distributed to all the stakers. In all the above solutions, the tokens are distributed completely. 
-2. All though I have written test cases, I am not sure that the contracts will pass all the testcases. Given enough time I may write a well-tested code.
+2. All though I have written test cases, I am not sure that the contracts are robust and error free. Given enough time I may write a well-tested code.
